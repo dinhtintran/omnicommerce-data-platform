@@ -1,0 +1,54 @@
+name: omnicommerce
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: omni-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../databases/postgres/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      # -h 127.0.0.1 forces TCP: the temporary server used during init only
+      # listens on a Unix socket, so the check cannot pass before init is done.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  mysql:
+    image: mysql:8.4
+    container_name: omni-mysql
+    restart: unless-stopped
+    command: ["--default-time-zone=+00:00"]
+    # InnoDB flushes buffers on shutdown; the 10s default can end in SIGKILL (exit 137).
+    stop_grace_period: 60s
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../databases/mysql/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      # 127.0.0.1 (not localhost) forces TCP, which is disabled during init.
+      # MYSQL_PWD keeps the password out of the process list.
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -u root --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  mysql_data:
